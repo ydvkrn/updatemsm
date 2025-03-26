@@ -73,6 +73,76 @@
     </div>
 
     <script>
+    // Repo aur file details
+    const repoOwner = "ydvkrn";
+    const repoName = "Personality";
+    const branch = "main";
+    const reelFilePath = "reels.json";
+    const profileFilePath = "profiles.json";
+    const reelJsonUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/${branch}/${reelFilePath}`;
+    const profileJsonUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/${branch}/${profileFilePath}`;
+    const reelApiUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${reelFilePath}`;
+    const profileApiUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${profileFilePath}`;
+
+    let reelCurrentPage = 1, profileCurrentPage = 1;
+    const itemsPerPage = 5;
+    let allReels = [], allProfiles = [];
+
+    // Token fetch karne ka function
+    async function fetchToken() {
+        try {
+            const response = await fetch("http://msmpr.free.nf/secret.php");
+            if (!response.ok) throw new Error("Token fetch failed");
+            const token = await response.text(); // Agar JSON hai to adjust karein
+            return token.trim();
+        } catch (error) {
+            console.error("Error fetching token:", error);
+            return null;
+        }
+    }
+
+    // Data fetch karne ka function
+    async function fetchData() {
+        const githubToken = await fetchToken();
+        if (!githubToken) {
+            console.error("No token, aborting.");
+            return;
+        }
+
+        try {
+            // Reels fetch
+            const reelResponse = await fetch(reelApiUrl, {
+                headers: {
+                    "Authorization": `token ${githubToken}`,
+                    "Accept": "application/vnd.github.v3 Dell+json"
+                }
+            });
+            if (!reelResponse.ok) throw new Error("Failed to fetch reels");
+            const reelData = await reelResponse.json();
+            allReels = JSON.parse(atob(reelData.content));
+            console.log("Reels loaded:", allReels);
+
+            // Profiles fetch
+            const profileResponse = await fetch(profileApiUrl, {
+                headers: {
+                    "Authorization": `token ${githubToken}`,
+                    "Accept": "application/vnd.github.v3+json"
+                }
+            });
+            if (!profileResponse.ok) throw new Error("Failed to fetch profiles");
+            const profileData = await profileResponse.json();
+            allProfiles = JSON.parse(atob(profileData.content));
+            console.log("Profiles loaded:", allProfiles);
+
+            // Yahan aap apna pagination ya display logic add kar sakte hain
+            // Example: renderReels(), renderProfiles(), etc.
+        } catch (error) {
+            console.error("Error fetching data:", error);
+        }
+    }
+
+    // Script start
+    fetchData();
         // Replace with your new valid GitHub token
         const githubToken = "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"; // Paste your new token here
         const repoOwner = "ydvkrn";
