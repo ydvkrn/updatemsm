@@ -73,7 +73,8 @@
     </div>
 
     <script>
-        const githubToken = "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";
+        // Replace with your new valid GitHub token
+        const githubToken = "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"; // Paste your new token here
         const repoOwner = "ydvkrn";
         const repoName = "Personality";
         const branch = "main";
@@ -97,15 +98,17 @@
             document.querySelector(`.tab-btn[onclick="openTab('${tabName}')"]`).classList.add('active');
         }
 
-        // Common Fetch Function
+        // Fetch JSON
         async function fetchJson(url) {
             try {
                 const response = await fetch(url, { cache: 'no-store' });
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                if (!response.ok) {
+                    if (response.status === 404) return url.includes('reels') ? { reels: [] } : { profiles: [] };
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 return await response.json() || (url.includes('reels') ? { reels: [] } : { profiles: [] });
             } catch (error) {
                 showMessage(`Error fetching JSON: ${error.message}`, 'error', url.includes('reels') ? 'reel' : 'profile');
-                console.error('Fetch error:', error);
                 return url.includes('reels') ? { reels: [] } : { profiles: [] };
             }
         }
@@ -116,10 +119,10 @@
             reelList.innerHTML = '<p>⏳ Loading Reels...</p>';
             const reelData = await fetchJson(reelJsonUrl);
             allReels = reelData.reels || [];
-            updateReelPage(reelData);
+            updateReelPage();
         }
 
-        function updateReelPage(reelData) {
+        function updateReelPage() {
             const reelList = document.getElementById('reel-list');
             reelList.innerHTML = "";
             if (!allReels.length) {
@@ -128,7 +131,7 @@
                 return;
             }
             const start = (reelCurrentPage - 1) * itemsPerPage;
-            const end = start + itemsPerPage;
+            const end = Math.min(start + itemsPerPage, allReels.length);
             allReels.slice(start, end).forEach((reel, index) => renderReel(reel, start + index));
             updateReelPagination();
         }
@@ -155,7 +158,7 @@
             const reelData = await fetchJson(reelJsonUrl);
             allReels = searchId ? reelData.reels.filter(reel => reel.id.toLowerCase().includes(searchId.toLowerCase())) : reelData.reels;
             reelCurrentPage = 1;
-            updateReelPage(reelData);
+            updateReelPage();
         }
 
         async function deleteReel(index) {
@@ -164,12 +167,12 @@
                 const getResponse = await fetch(reelApiUrl, { headers: { 'Authorization': `Bearer ${githubToken}`, 'Accept': 'application/vnd.github.v3+json' } });
                 if (!getResponse.ok) throw new Error(`Failed to fetch file: ${getResponse.status}`);
                 const fileData = await getResponse.json();
-                allReels.splice(index, 1);
-                await updateJson(reelApiUrl, { reels: allReels }, fileData.sha, `Delete reel at index ${index}`, 'reel');
-                await loadReels();
+                const actualIndex = (reelCurrentPage - 1) * itemsPerPage + index;
+                allReels.splice(actualIndex, 1);
+                await updateJson(reelApiUrl, { reels: allReels }, fileData.sha, `Delete reel at index ${actualIndex}`, 'reel');
+                updateReelPage();
             } catch (error) {
                 showMessage(`❌ Delete failed: ${error.message}`, 'error', 'reel');
-                console.error('Delete error:', error);
             }
         }
 
@@ -178,10 +181,16 @@
             const videoUrl = document.getElementById('video-url').value.trim();
             const title = document.getElementById('title').value.trim();
             if (!profileId || !videoUrl || !title) return showMessage("❌ Please fill all fields!", "error", 'reel');
+            if (!isValidUrl(videoUrl)) return showMessage("❌ Invalid Video URL!", "error", 'reel');
             try {
                 const currentData = await fetchJson(reelJsonUrl);
+                if (!currentData.reels) currentData.reels = [];
+                if (currentData.reels.some(reel => reel.id === profileId)) return showMessage("❌ Profile ID already exists!", "error", 'reel');
                 currentData.reels.push({ id: profileId, title: title, media: videoUrl });
-                await updateJson(reelApiUrl, currentData, null, 'Update reels.json', 'reel');
+                const getResponse = await fetch(reelApiUrl, { headers: { 'Authorization': `Bearer ${githubToken}`, 'Accept': 'application/vnd.github.v3+json' } });
+                if (!getResponse.ok) throw new Error(`Failed to fetch file: ${getResponse.status}`);
+                const fileData = await getResponse.json();
+                await updateJson(reelApiUrl, currentData, fileData.sha, 'Update reels.json', 'reel');
                 document.getElementById('reel-profile-id').value = '';
                 document.getElementById('video-url').value = '';
                 document.getElementById('title').value = '';
@@ -192,18 +201,18 @@
         }
 
         function updateReelPagination() {
-            const totalPages = Math.ceil(allReels.length / itemsPerPage);
+            const totalPages = Math.ceil(allReels.length / itemsPerPage) || 1;
             document.getElementById('reel-page-info').textContent = `Page ${reelCurrentPage} of ${totalPages}`;
             document.getElementById('reel-prev-btn').disabled = reelCurrentPage === 1;
             document.getElementById('reel-next-btn').disabled = reelCurrentPage === totalPages;
         }
 
         function reelNextPage() {
-            if (reelCurrentPage < Math.ceil(allReels.length / itemsPerPage)) { reelCurrentPage++; loadReels(); }
+            if (reelCurrentPage < Math.ceil(allReels.length / itemsPerPage)) { reelCurrentPage++; updateReelPage(); }
         }
 
         function reelPrevPage() {
-            if (reelCurrentPage > 1) { reelCurrentPage--; loadReels(); }
+            if (reelCurrentPage > 1) { reelCurrentPage--; updateReelPage(); }
         }
 
         // Profiles Functions
@@ -212,10 +221,10 @@
             profileList.innerHTML = '<p>⏳ Loading Profiles...</p>';
             const profileData = await fetchJson(profileJsonUrl);
             allProfiles = profileData.profiles || [];
-            updateProfilePage(profileData);
+            updateProfilePage();
         }
 
-        function updateProfilePage(profileData) {
+        function updateProfilePage() {
             const profileList = document.getElementById('profile-list');
             profileList.innerHTML = "";
             if (!allProfiles.length) {
@@ -224,7 +233,7 @@
                 return;
             }
             const start = (profileCurrentPage - 1) * itemsPerPage;
-            const end = start + itemsPerPage;
+            const end = Math.min(start + itemsPerPage, allProfiles.length);
             allProfiles.slice(start, end).forEach((profile, index) => renderProfile(profile, start + index));
             updateProfilePagination();
         }
@@ -237,7 +246,7 @@
                 <p><b>ID:</b> ${profile.id}</p>
                 <p><b>Username:</b> ${profile.username}</p>
                 <p><b>Verified:</b> ${profile.verified ? 'Yes' : 'No'}</p>
-                <img src="${profile.profile}" alt="${profile.username}'s profile">
+                <img src="${profile.profile}" alt="${profile.username}'s profile" onerror="this.src='https://via.placeholder.com/100';">
                 <button class="delete-btn" onclick="deleteProfile(${index})">❌ Delete</button>
             `;
             profileList.appendChild(profileItem);
@@ -248,7 +257,7 @@
             const profileData = await fetchJson(profileJsonUrl);
             allProfiles = searchId ? profileData.profiles.filter(profile => profile.id.toLowerCase().includes(searchId.toLowerCase())) : profileData.profiles;
             profileCurrentPage = 1;
-            updateProfilePage(profileData);
+            updateProfilePage();
         }
 
         async function deleteProfile(index) {
@@ -257,12 +266,12 @@
                 const getResponse = await fetch(profileApiUrl, { headers: { 'Authorization': `Bearer ${githubToken}`, 'Accept': 'application/vnd.github.v3+json' } });
                 if (!getResponse.ok) throw new Error(`Failed to fetch file: ${getResponse.status}`);
                 const fileData = await getResponse.json();
-                allProfiles.splice(index, 1);
-                await updateJson(profileApiUrl, { profiles: allProfiles }, fileData.sha, `Delete profile at index ${index}`, 'profile');
-                await loadProfiles();
+                const actualIndex = (profileCurrentPage - 1) * itemsPerPage + index;
+                allProfiles.splice(actualIndex, 1);
+                await updateJson(profileApiUrl, { profiles: allProfiles }, fileData.sha, `Delete profile at index ${actualIndex}`, 'profile');
+                updateProfilePage();
             } catch (error) {
                 showMessage(`❌ Delete failed: ${error.message}`, 'error', 'profile');
-                console.error('Delete error:', error);
             }
         }
 
@@ -271,47 +280,85 @@
             const username = document.getElementById('username').value.trim();
             const profileUrl = document.getElementById('profile-url').value.trim();
             const verified = document.getElementById('verified').checked;
-            if (!profileId || !username || !profileUrl) return showMessage("❌ Please fill all required fields!", "error", 'profile');
+
+            if (!profileId || !username || !profileUrl) {
+                showMessage("❌ Please fill all required fields!", "error", 'profile');
+                return;
+            }
+            if (!isValidUrl(profileUrl)) {
+                showMessage("❌ Invalid Profile Image URL!", "error", 'profile');
+                return;
+            }
+
             try {
                 const currentData = await fetchJson(profileJsonUrl);
-                currentData.profiles.push({ id: profileId, username: username, profile: profileUrl, verified: verified });
-                await updateJson(profileApiUrl, currentData, null, 'Update profiles.json', 'profile');
+                if (!currentData.profiles) currentData.profiles = [];
+
+                if (currentData.profiles.some(profile => profile.id === profileId)) {
+                    showMessage("❌ Profile ID already exists!", "error", 'profile');
+                    return;
+                }
+
+                const newProfile = { id: profileId, username: username, profile: profileUrl, verified: verified };
+                currentData.profiles.push(newProfile);
+
+                const getResponse = await fetch(profileApiUrl, {
+                    headers: { 'Authorization': `Bearer ${githubToken}`, 'Accept': 'application/vnd.github.v3+json' }
+                });
+                if (!getResponse.ok) {
+                    const errorText = await getResponse.text();
+                    throw new Error(`Failed to fetch file: ${getResponse.status} - ${errorText}`);
+                }
+                const fileData = await getResponse.json();
+
+                await updateJson(profileApiUrl, currentData, fileData.sha, 'Add new profile', 'profile');
+
                 document.getElementById('profile-id').value = '';
                 document.getElementById('username').value = '';
                 document.getElementById('profile-url').value = '';
                 document.getElementById('verified').checked = false;
+
                 await loadProfiles();
             } catch (error) {
                 showMessage(`❌ Add failed: ${error.message}`, 'error', 'profile');
+                console.error('Add Profile Error:', error);
             }
         }
 
         function updateProfilePagination() {
-            const totalPages = Math.ceil(allProfiles.length / itemsPerPage);
+            const totalPages = Math.ceil(allProfiles.length / itemsPerPage) || 1;
             document.getElementById('profile-page-info').textContent = `Page ${profileCurrentPage} of ${totalPages}`;
             document.getElementById('profile-prev-btn').disabled = profileCurrentPage === 1;
             document.getElementById('profile-next-btn').disabled = profileCurrentPage === totalPages;
         }
 
         function profileNextPage() {
-            if (profileCurrentPage < Math.ceil(allProfiles.length / itemsPerPage)) { profileCurrentPage++; loadProfiles(); }
+            if (profileCurrentPage < Math.ceil(allProfiles.length / itemsPerPage)) { profileCurrentPage++; updateProfilePage(); }
         }
 
         function profilePrevPage() {
-            if (profileCurrentPage > 1) { profileCurrentPage--; loadProfiles(); }
+            if (profileCurrentPage > 1) { profileCurrentPage--; updateProfilePage(); }
         }
 
-        // Common Update Function
+        // Utility Functions
+        function isValidUrl(string) {
+            try {
+                new URL(string);
+                return true;
+            } catch (_) {
+                return false;
+            }
+        }
+
         async function updateJson(apiUrl, newData, sha, message, type) {
             try {
-                if (!sha) {
-                    const response = await fetch(apiUrl, { headers: { 'Authorization': `Bearer ${githubToken}`, 'Accept': 'application/vnd.github.v3+json' } });
-                    if (!response.ok) throw new Error('Failed to fetch JSON metadata');
-                    sha = (await response.json()).sha;
-                }
                 const updateResponse = await fetch(apiUrl, {
                     method: 'PUT',
-                    headers: { 'Authorization': `Bearer ${githubToken}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+                    headers: {
+                        'Authorization': `Bearer ${githubToken}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({
                         message: message,
                         content: btoa(unescape(encodeURIComponent(JSON.stringify(newData, null, 2)))),
@@ -319,15 +366,19 @@
                         branch: branch
                     })
                 });
-                if (!updateResponse.ok) throw new Error(`Update failed: ${(await updateResponse.json()).message}`);
+
+                if (!updateResponse.ok) {
+                    const errorData = await updateResponse.json();
+                    throw new Error(`Update failed: ${errorData.message}`);
+                }
+
                 showMessage(`✅ ${type === 'reel' ? 'Reel' : 'Profile'} ${message.includes('Delete') ? 'deleted' : 'added'} successfully!`, 'success', type);
             } catch (error) {
                 showMessage(`❌ Update failed: ${error.message}`, 'error', type);
-                console.error('Update error:', error);
+                throw error;
             }
         }
 
-        // Message Display
         function showMessage(msg, type, section) {
             const messageDiv = document.getElementById(`${section}-message`);
             messageDiv.textContent = msg;
@@ -339,4 +390,4 @@
         window.onload = () => { loadReels(); loadProfiles(); };
     </script>
 </body>
-  </html>
+</html>
