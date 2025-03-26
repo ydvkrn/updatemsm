@@ -1,16 +1,23 @@
-name: Deploy
+name: Use GitHub Secret in Code
 
-on: [push]
+on: [push]  # जब भी Code Push होगा, यह Trigger होगा
 
 jobs:
-  deploy:
+  run-script:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Use GitHub Token
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.x'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt  # अगर कोई Dependency हो
+
+      - name: Run Python Script
         env:
-          TOKEN: ${{ secrets.GToken }}
-        run: echo "Your token is stored securely"
+          GITHUB_TOKEN: ${{ secrets.GToken }}  # Secret को Env Var में Set करो
+        run: python my_script.py
